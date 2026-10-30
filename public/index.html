@@ -20,8 +20,14 @@
     </header>
 
     <section class="status" id="status" data-level="none" aria-live="polite">
-      <div class="status-title" id="statusTitle">No contractions yet</div>
-      <div class="status-detail" id="statusDetail">Tap the big button when one starts.</div>
+      <div class="status-main">
+        <div class="status-title" id="statusTitle">No contractions yet</div>
+        <div class="status-detail" id="statusDetail">Tap the big button when one starts.</div>
+      </div>
+      <div class="countdown" id="countdown" hidden>
+        <div class="countdown-time" id="countdownTime">—</div>
+        <div class="countdown-caption" id="countdownCaption"></div>
+      </div>
     </section>
 
     <section class="stats">

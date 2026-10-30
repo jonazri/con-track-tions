@@ -64,6 +64,22 @@ h2 { font-size: 1rem; margin: 0; }
 .status[data-level="close"] { background: var(--hot); }
 .status[data-level="go"] { background: var(--go); animation: glow 1.6s ease-in-out infinite; }
 .status[data-level="lapsed"], .status[data-level="none"] { background: var(--gray); }
+.status { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: center; }
+.status:has(.countdown:not([hidden])) { grid-template-columns: 1fr 1fr; }
+.status-main { min-width: 0; }
+.countdown {
+  text-align: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+  padding-left: 12px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.countdown[hidden] { display: none; }
+.countdown-time { font-size: 2.2rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.countdown-time.day { font-size: 1.4rem; }
+.countdown-caption { font-size: 0.78rem; opacity: 0.95; margin-top: 4px; }
 .status-title { font-weight: 800; font-size: 1.3rem; }
 .status-detail { opacity: 0.95; font-size: 0.95rem; margin-top: 2px; }
 @keyframes glow {

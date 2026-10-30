@@ -1,4 +1,5 @@
 import { EMPTY_STATE, RULES, applyOp, computeStats, normalizeState } from "/state.mjs";
+import { countdown, fmtHM } from "/zmanim.mjs";
 
 const API = "/api/state";
 const POLL_MS = 3000;
@@ -7,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   sync: $("sync"), syncText: $("syncText"),
   status: $("status"), statusTitle: $("statusTitle"), statusDetail: $("statusDetail"),
+  countdown: $("countdown"), countdownTime: $("countdownTime"), countdownCaption: $("countdownCaption"),
   avgInterval: $("avgInterval"), avgIntervalSub: $("avgIntervalSub"),
   avgDuration: $("avgDuration"), avgDurationSub: $("avgDurationSub"),
   big: $("big"), bigLabel: $("bigLabel"), bigTimer: $("bigTimer"), bigHint: $("bigHint"),
@@ -132,6 +134,17 @@ function render() {
     "content",
     getComputedStyle(el.status).backgroundColor,
   );
+
+  // Countdown to 20 Cheshvan (right half of the banner); hidden once the day has passed.
+  const cd = countdown(now);
+  if (cd.phase === "past") {
+    el.countdown.hidden = true;
+  } else {
+    el.countdown.hidden = false;
+    el.countdownTime.classList.toggle("day", cd.phase === "day");
+    el.countdownTime.textContent = cd.phase === "day" ? "Today" : fmtHM(cd.until - now);
+    el.countdownCaption.textContent = cd.caption;
+  }
 
   // Averages
   el.avgInterval.textContent = fmtGap(st.avgInterval);
