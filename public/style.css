@@ -190,7 +190,7 @@ h2 { font-size: 1rem; margin: 0; }
 .chart .panel-title { fill: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
 .chart .series { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .dot { fill: var(--series); stroke: var(--card); stroke-width: 2; }
-.chart .trend { stroke: var(--series-ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.chart .trend { fill: none; stroke: var(--series-ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .chart .band { fill: var(--series); fill-opacity: 0.16; }
 .chart .target { stroke: var(--target); stroke-width: 1; }
 .chart .target-label { fill: var(--target); font-size: 9px; }

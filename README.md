@@ -22,11 +22,13 @@ foreground), so whoever taps, the other sees it within a few seconds.
 - **Undo last** removes the most recent entry. **Edit** on any entry opens sliders to nudge the start time (5-second steps) and the duration (1-second steps), or delete it.
 - The **Rule** dropdown switches between 5-1-1 and 4-1-1 for everyone.
 - The **Trend & forecast** chart at the bottom plots minutes-between and duration over time,
-  with a robust (Theil–Sen) trend line, a ±1σ (MAD) band, the rule's targets, and a shaded
-  forecast window for when the trend reaches the pattern (plus an hour for the hospital rule).
-  Only the current session counts: a break of over an hour starts a new one, and durations under
-  10 seconds are ignored as mis-taps. The forecast says when it is uncertain. Hover or drag
-  across it for values.
+  with a log-linear robust (Theil–Sen) trend as percent change per hour, a ±1σ (MAD) band, the
+  rule's targets, and a shaded forecast window for when the trend reaches the pattern (plus an
+  hour for the hospital rule). The rate comes from the last 3 hours and the projection starts
+  from the median of the last 5, so it follows a labor that speeds up, stalls, and speeds up
+  again. Only the current session counts: a break of over an hour starts a new one, and
+  durations under 10 seconds are ignored as mis-taps. The forecast says when the drift is flat
+  or uncertain rather than inventing a time. Hover or drag across it for values.
 
 Follow your provider's instructions over the app, and go in regardless if water breaks,
 there is bleeding, or anything feels wrong.
