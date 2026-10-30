@@ -1,0 +1,15 @@
+{
+  "name": "con-track-tions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared contraction timer: one big button, rolling averages, and a go-to-hospital indicator, synced through a Netlify Function + Netlify Blobs.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "node test/dev-server.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0",
+    "@netlify/functions": "^4.0.0"
+  }
+}

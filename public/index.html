@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b1b22" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Contraction Timer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23e8647c'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <h1>Contraction Timer</h1>
+      <div class="sync" id="sync" aria-live="polite">
+        <span class="dot"></span><span id="syncText">Connecting…</span>
+      </div>
+    </header>
+
+    <section class="status" id="status" data-level="none" aria-live="polite">
+      <div class="status-title" id="statusTitle">No contractions yet</div>
+      <div class="status-detail" id="statusDetail">Tap the big button when one starts.</div>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <div class="stat-label">Avg time between</div>
+        <div class="stat-value" id="avgInterval">—</div>
+        <div class="stat-sub" id="avgIntervalSub">start to start</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Avg duration</div>
+        <div class="stat-value" id="avgDuration">—</div>
+        <div class="stat-sub" id="avgDurationSub">last 5</div>
+      </div>
+    </section>
+
+    <button class="big" id="big" type="button" data-state="idle">
+      <span class="big-label" id="bigLabel">Contraction started</span>
+      <span class="big-timer" id="bigTimer"></span>
+      <span class="big-hint" id="bigHint">Tap when one begins</span>
+    </button>
+
+    <div class="under" id="under">
+      <span id="sinceLast"></span>
+      <button class="link" id="undo" type="button" hidden>Undo last</button>
+    </div>
+
+    <section class="history">
+      <div class="history-head">
+        <h2>History <span class="count" id="count"></span></h2>
+        <div class="rule">
+          <label for="rule">Rule</label>
+          <select id="rule" aria-label="Hospital rule">
+            <option value="511">5-1-1</option>
+            <option value="411">4-1-1</option>
+          </select>
+        </div>
+      </div>
+      <ol class="list" id="list"></ol>
+      <p class="empty" id="empty">Nothing recorded yet.</p>
+      <div class="danger-row">
+        <button class="link danger" id="clear" type="button" hidden>Clear everything</button>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p><strong>5-1-1</strong> = contractions about 5 minutes apart, lasting about 1 minute, for 1 hour.
+      Follow your own provider's instructions over this app, and go in regardless if your water
+      breaks, there is bleeding, or anything feels wrong.</p>
+    </footer>
+  </main>
+
+  <dialog id="editDialog">
+    <form method="dialog" id="editForm">
+      <h3>Edit contraction</h3>
+      <label>Started
+        <input type="datetime-local" step="1" id="editStart" required />
+      </label>
+      <label>Ended
+        <input type="datetime-local" step="1" id="editEnd" />
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="editCancel">Cancel</button>
+        <button type="submit" class="btn" id="editSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
