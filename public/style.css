@@ -198,7 +198,12 @@ h2 { font-size: 1rem; margin: 0; }
 .chart .now-line { stroke: var(--muted); stroke-width: 1; }
 .chart .now-label { fill: var(--muted); font-size: 9px; }
 .chart .fc-band { fill: var(--target); fill-opacity: 0.14; }
+.chart .fc-band.open-ended { fill: url(#fc-fade); }
 .chart .fc-line { stroke: var(--target); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .fc-line.low { stroke-opacity: 0.6; }
+.chart .dot.clipped { fill: var(--card); stroke: var(--series); }
+.chart-note { font-size: 0.75rem; color: var(--muted); margin: 2px 0 0; }
+.chart-note:empty { display: none; }
 .chart .fc-label { fill: var(--target); font-weight: 700; }
 .chart .crosshair { stroke: var(--text); stroke-width: 1; stroke-opacity: 0.5; }
 .tooltip { position: absolute; top: 8px; pointer-events: none; background: var(--text); color: var(--card); font-size: 0.75rem; line-height: 1.35; padding: 6px 8px; border-radius: 8px; white-space: nowrap; box-shadow: var(--shadow); }

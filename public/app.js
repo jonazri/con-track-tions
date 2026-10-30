@@ -19,7 +19,7 @@ const el = {
   editStart: $("editStart"), editStartClock: $("editStartClock"), editStartDelta: $("editStartDelta"),
   editDuration: $("editDuration"), editDurationText: $("editDurationText"), editDurationMax: $("editDurationMax"),
   editOpenNote: $("editOpenNote"),
-  chart: $("chart"), chartWrap: $("chartWrap"), chartTip: $("chartTip"), chartCaption: $("chartCaption"), chartEmpty: $("chartEmpty"),
+  chart: $("chart"), chartWrap: $("chartWrap"), chartTip: $("chartTip"), chartCaption: $("chartCaption"), chartNote: $("chartNote"), chartEmpty: $("chartEmpty"),
 };
 
 let state = { ...EMPTY_STATE };
@@ -236,6 +236,12 @@ function drawChart(now) {
   }
   chartLayout = renderChart(el.chart, state, st.rule, now);
   el.chartCaption.textContent = chartLayout ? describeForecast(chartLayout.fc, st.rule) : "";
+  const notes = [];
+  if (chartLayout?.hiddenSessions) {
+    notes.push(`Showing this session since ${fmtClock(chartLayout.sessionStart)}; ${chartLayout.hiddenSessions} earlier contraction${chartLayout.hiddenSessions === 1 ? "" : "s"} before a break of over an hour are left out.`);
+  }
+  if (chartLayout?.ignored) notes.push(`${chartLayout.ignored} entr${chartLayout.ignored === 1 ? "y" : "ies"} under 10 seconds ignored as mis-taps.`);
+  el.chartNote.textContent = notes.join(" ");
   el.chartTip.hidden = true;
 }
 

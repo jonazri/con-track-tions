@@ -16,6 +16,23 @@ export const EMPTY_STATE = Object.freeze({
 const DAY = 24 * 60 * 60e3;
 const DUPLICATE_START_WINDOW = 20e3; // two taps on "started" within 20s = same contraction
 
+/** A quiet stretch longer than this (sleep, a lull) starts a new session. */
+export const SESSION_GAP = 60 * 60e3;
+/** Durations shorter than this are treated as mis-taps and left out of the stats. */
+export const MIN_DURATION = 10e3;
+
+/** The contractions since the last gap longer than SESSION_GAP, sorted by start. */
+export function currentSession(contractions) {
+  const list = [...contractions].sort((a, b) => a.start - b.start);
+  let from = 0;
+  for (let i = 1; i < list.length; i++) if (list[i].start - list[i - 1].start > SESSION_GAP) from = i;
+  return list.slice(from);
+}
+
+export function isValidDuration(c) {
+  return c.end != null && c.end - c.start >= MIN_DURATION;
+}
+
 function clampTime(at, now) {
   const t = Number(at);
   if (!Number.isFinite(t)) return now;
@@ -144,10 +161,13 @@ const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : nul
  */
 export function computeStats(state, now = Date.now(), windowSize = 5) {
   const rule = RULES[state.rule] || RULES["511"];
-  const all = sortByStart(state.contractions);
-  const completed = all.filter((c) => c.end != null);
-  const open = all.find((c) => c.end == null) || null;
-  const last = all[all.length - 1] || null;
+  const everything = sortByStart(state.contractions);
+  const open = everything.find((c) => c.end == null) || null;
+  const last = everything[everything.length - 1] || null;
+  // Averages and the streak only look at the current session, so a night's
+  // sleep doesn't become a 7-hour "interval".
+  const all = currentSession(everything);
+  const completed = all.filter(isValidDuration);
 
   // Rolling average interval: start-to-start over the last `windowSize` gaps.
   const starts = all.map((c) => c.start);
@@ -167,7 +187,7 @@ export function computeStats(state, now = Date.now(), windowSize = 5) {
     const slice = all.slice(all.length - k);
     const gaps = [];
     for (let i = 1; i < slice.length; i++) gaps.push(slice[i].start - slice[i - 1].start);
-    const durs = slice.filter((c) => c.end != null).map((c) => c.end - c.start);
+    const durs = slice.filter(isValidDuration).map((c) => c.end - c.start);
     const ok =
       durs.length >= 2 && avg(gaps) <= rule.interval && avg(durs) >= rule.duration;
     if (ok) {
@@ -191,7 +211,9 @@ export function computeStats(state, now = Date.now(), windowSize = 5) {
 
   return {
     rule,
-    count: all.length,
+    count: everything.length,
+    sessionCount: all.length,
+    sessionStart: all.length ? all[0].start : null,
     open,
     last,
     avgInterval,

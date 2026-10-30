@@ -123,3 +123,21 @@ test("stats: an open contraction counts toward intervals but not durations", () 
   assert.equal(st.intervalsUsed, 4);
   assert.equal(st.durationsUsed, 4);
 });
+
+test("stats: a break over an hour starts a new session for the averages", () => {
+  const s = pattern({ count: 6, gap: 5 * M, dur: 65e3, endAt: T0 - 7 * 60 * M }); // last night
+  s.contractions.push({ id: "m1", start: T0, end: T0 + 50e3 }, { id: "m2", start: T0 + 10 * M, end: T0 + 10 * M + 50e3 });
+  const st = computeStats(s, T0 + 11 * M);
+  assert.equal(st.sessionCount, 2);
+  assert.equal(st.count, 8);
+  assert.equal(st.avgInterval, 10 * M); // not polluted by the 7-hour gap
+  assert.equal(st.avgDuration, 50e3);
+});
+
+test("stats: durations under 10 seconds are ignored as mis-taps", () => {
+  const s = pattern({ count: 4, gap: 5 * M, dur: 60e3, endAt: T0 });
+  s.contractions[1] = { ...s.contractions[1], end: s.contractions[1].start + 3000 };
+  const st = computeStats(s, T0 + M);
+  assert.equal(st.avgDuration, 60e3);
+  assert.equal(st.durationsUsed, 3);
+});

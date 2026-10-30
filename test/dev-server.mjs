@@ -7,6 +7,7 @@ import { EMPTY_STATE, applyOp } from "../public/state.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 let state = { ...EMPTY_STATE };
+if (process.env.STATE_FILE) state = JSON.parse(await readFile(process.env.STATE_FILE, "utf8"));
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript" };
 
 const server = http.createServer(async (req, res) => {

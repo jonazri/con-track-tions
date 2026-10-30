@@ -21,10 +21,14 @@ test("fit recovers a straight line with zero sigma", () => {
   assert.equal(fit([pts[0]]), null);
 });
 
-test("fit sigma is the residual standard deviation", () => {
-  const f = fit([{ x: T0, y: 1 }, { x: T0 + H, y: 3 }, { x: T0 + 2 * H, y: 1 }, { x: T0 + 3 * H, y: 3 }]);
-  assert.ok(Math.abs(f.b - 0.4) < 1e-9);
-  assert.ok(Math.abs(f.sigma - Math.sqrt(3.2 / 2)) < 1e-9);
+test("fit is robust: one wild outlier barely moves the line, and sigma is MAD-based", () => {
+  const noise = [0.1, -0.2, 0.15, 0, -0.1, 0.2, -0.15];
+  const pts = [0, 1, 2, 3, 4, 5, 6].map((h) => ({ x: T0 + h * H, y: 10 - h + noise[h] }));
+  pts[3] = { x: pts[3].x, y: 400 }; // a 400-minute "interval" (a night's sleep)
+  const f = fit(pts);
+  assert.ok(Math.abs(f.b + 1) < 0.3, `slope ${f.b}`);
+  assert.ok(f.sigma < 2, `sigma ${f.sigma}`);
+  assert.ok(f.bLo <= f.b && f.b <= f.bHi);
 });
 
 test("series: intervals in minutes at the later start, durations in seconds", () => {
@@ -35,22 +39,52 @@ test("series: intervals in minutes at the later start, durations in seconds", ()
   assert.equal(durations[1].y, 40);
 });
 
-test("forecast: intervals shortening and durations lengthening give a crossing time", () => {
-  // Interval shrinks 2 min per contraction from 12m; duration grows 8s from 30s.
+test("forecast: a clean shortening trend gives a clear crossing time", () => {
+  // Interval shrinks 1 min per contraction from 12m; durations already long.
   const specs = [];
   let at = 0;
-  for (let i = 0; i < 5; i++) {
-    specs.push({ at, dur: 30 + 8 * i });
-    at += (12 - 2 * i) * M;
+  for (let i = 0; i < 6; i++) {
+    specs.push({ at, dur: 70 });
+    at += (12 - i) * M;
   }
   const s = build(specs);
   const now = T0 + at;
   const fc = forecast(s, rule, now);
   assert.equal(fc.status, "forecast");
-  assert.ok(fc.at >= now);
+  assert.equal(fc.confidence, "clear");
+  assert.ok(fc.at > now && fc.at < now + 3 * H);
   assert.ok(fc.early <= fc.at && fc.at <= fc.late);
   assert.equal(fc.hospitalAt, fc.at + rule.span);
-  assert.match(describeForecast(fc, rule), /5-1-1 pattern starts around/);
+  assert.match(describeForecast(fc, rule), /Clear trend/);
+});
+
+test("forecast: a noisy drift is reported with low confidence and an open-ended range", () => {
+  const gaps = [10, 9, 12, 8, 11, 9, 10, 8]; // drifting down a little, but noisy
+  const specs = [];
+  let at = 0;
+  for (let i = 0; i <= gaps.length; i++) {
+    specs.push({ at, dur: 70 });
+    if (i < gaps.length) at += gaps[i] * M;
+  }
+  const fc = forecast(build(specs), rule, T0 + at);
+  assert.ok(["forecast", "far", "no-trend"].includes(fc.status), fc.status);
+  if (fc.status === "forecast") {
+    assert.equal(fc.confidence, "low");
+    assert.equal(fc.late, Infinity);
+    assert.match(describeForecast(fc, rule), /still uncertain/);
+  }
+});
+
+test("forecast ignores earlier sessions and sub-10s mis-taps", () => {
+  const specs = [{ at: -8 * H, dur: 40 }, { at: -8 * H + 5 * M, dur: 40 }, { at: -8 * H + 10 * M, dur: 40 }];
+  for (let i = 0; i < 5; i++) specs.push({ at: i * 9 * M, dur: i === 2 ? 3 : 65 });
+  const s = build(specs);
+  const { intervals, durations, hiddenSessions, ignored } = seriesFrom(s);
+  assert.equal(hiddenSessions, 3);
+  assert.equal(ignored, 1);
+  assert.equal(intervals.length, 4);
+  assert.ok(intervals.every((p) => p.y === 9));
+  assert.equal(durations.length, 4);
 });
 
 test("forecast: already at the pattern", () => {

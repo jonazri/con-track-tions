@@ -1,56 +1,81 @@
 // Trend chart: least-squares regression, ±1σ band, and a 5-1-1 forecast.
 // Math is pure; renderChart() draws inline SVG.
+import { currentSession, isValidDuration } from "./state.mjs";
 
 const MIN = 60e3;
 const HOUR = 3600e3;
 
-/** Least-squares fit y = a + b·x over points [{x, y}], x in ms. Slope is per hour. */
+const median = (arr) => {
+  if (!arr.length) return 0;
+  const b = [...arr].sort((p, q) => p - q);
+  const m = b.length >> 1;
+  return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
+};
+
+/**
+ * Robust straight-line fit y = a + b·x over points [{x, y}], x in ms, slope per hour.
+ * Theil–Sen: the slope is the median of all pairwise slopes, so a few outliers
+ * (a missed tap, a lull, a 3-second mis-tap) can't drag the line. Spread is
+ * 1.4826·MAD of the residuals, which plays the role of σ. The slope interval
+ * [bLo, bHi] is Sen's distribution-free 90% confidence interval.
+ */
 export function fit(points) {
   const n = points.length;
   if (n < 2) return null;
   const x0 = points[0].x;
   const xs = points.map((p) => (p.x - x0) / HOUR);
   const ys = points.map((p) => p.y);
-  const mx = xs.reduce((s, v) => s + v, 0) / n;
-  const my = ys.reduce((s, v) => s + v, 0) / n;
-  let sxx = 0, sxy = 0;
+  const slopes = [];
   for (let i = 0; i < n; i++) {
-    sxx += (xs[i] - mx) ** 2;
-    sxy += (xs[i] - mx) * (ys[i] - my);
+    for (let j = i + 1; j < n; j++) if (xs[j] !== xs[i]) slopes.push((ys[j] - ys[i]) / (xs[j] - xs[i]));
   }
-  const b = sxx === 0 ? 0 : sxy / sxx;
-  const a = my - b * mx;
-  let sse = 0;
-  for (let i = 0; i < n; i++) sse += (ys[i] - (a + b * xs[i])) ** 2;
-  const sigma = n > 2 ? Math.sqrt(sse / (n - 2)) : null;
+  if (!slopes.length) return null;
+  slopes.sort((p, q) => p - q);
+  const b = median(slopes);
+  const a = median(ys.map((y, i) => y - b * xs[i]));
+  const res = ys.map((y, i) => y - (a + b * xs[i]));
+  const sigma = n > 2 ? 1.4826 * median(res.map(Math.abs)) : null;
+  // Sen's 90% slope interval: ranks N/2 ± z·sqrt(var(S))/2 with z = 1.645.
+  const N = slopes.length;
+  const C = 1.645 * Math.sqrt((n * (n - 1) * (2 * n + 5)) / 18);
+  const lo = Math.max(0, Math.floor((N - C) / 2));
+  const hi = Math.min(N - 1, Math.ceil((N + C) / 2));
+  const bLo = slopes[lo];
+  const bHi = slopes[hi];
   const at = (t) => a + b * ((t - x0) / HOUR);
-  // Time at which the line (shifted by `offset`) reaches `target`, or null if it never will.
-  const crossing = (target, offset = 0) => {
-    if (b === 0) return null;
-    return x0 + ((target - offset - a) / b) * HOUR;
+  // Where a line with slope `slope` through the fit's anchor (at `anchorT`) reaches `target`.
+  const crossingWith = (target, slope, anchorT) => {
+    if (!slope) return null;
+    return anchorT + ((target - at(anchorT)) / slope) * HOUR;
   };
-  return { n, a, b, sigma, x0, at, crossing };
+  const crossing = (target, offset = 0) => (b ? x0 + ((target - offset - a) / b) * HOUR : null);
+  return { n, a, b, bLo, bHi, sigma, x0, at, crossing, crossingWith };
 }
 
 export function seriesFrom(state) {
-  const list = [...state.contractions].sort((p, q) => p.start - q.start);
+  const list = currentSession(state.contractions);
   const intervals = [];
   for (let i = 1; i < list.length; i++) {
     intervals.push({ x: list[i].start, y: (list[i].start - list[i - 1].start) / MIN, id: list[i].id });
   }
-  const durations = list
-    .filter((c) => c.end != null)
-    .map((c) => ({ x: c.start, y: (c.end - c.start) / 1000, id: c.id }));
-  return { intervals, durations };
+  const durations = list.filter(isValidDuration).map((c) => ({ x: c.start, y: (c.end - c.start) / 1000, id: c.id }));
+  const hiddenSessions = state.contractions.length - list.length;
+  const ignored = list.filter((c) => c.end != null && !isValidDuration(c)).length;
+  return { intervals, durations, session: list, hiddenSessions, ignored };
 }
+
+export const FORECAST_HORIZON = 6 * HOUR;
 
 /**
  * When does the trend reach the rule? Interval must fall to `rule.interval`,
  * duration must rise to `rule.duration`. Returns one of:
  *  { status: "insufficient" }
- *  { status: "met" }                      both already at the target
- *  { status: "no-trend", reasons: [...] } a series is moving the wrong way
- *  { status: "forecast", at, early, late, hospitalAt, sources }
+ *  { status: "met" }                       both already at the target
+ *  { status: "no-trend", reasons }         a series is drifting the wrong way
+ *  { status: "far", at }                   right direction, but > 6h away at this pace
+ *  { status: "forecast", at, early, late, hospitalAt, confidence, drift }
+ *     confidence "clear" when the slope interval excludes zero; "low" when the
+ *     drift is there but not yet distinguishable from flat (late = Infinity).
  */
 export function forecast(state, rule, now = Date.now()) {
   const { intervals, durations } = seriesFrom(state);
@@ -58,39 +83,42 @@ export function forecast(state, rule, now = Date.now()) {
   const fd = fit(durations);
   if (!fi || !fd || intervals.length < 3 || durations.length < 3) return { status: "insufficient" };
 
-  const targetI = rule.interval / MIN;
-  const targetD = rule.duration / 1000;
   const parts = [];
   const reasons = [];
-
   const consider = (f, target, direction, label) => {
     const cur = f.at(now);
-    const met = direction < 0 ? cur <= target : cur >= target;
-    if (met) return;
+    if (direction < 0 ? cur <= target : cur >= target) return; // already there
     if (Math.sign(f.b) !== direction) {
       reasons.push(label);
       return;
     }
-    const s = f.sigma ?? 0;
-    // The band edge closer to the target crosses first.
-    const t = f.crossing(target);
-    const e = f.crossing(target, direction < 0 ? -s : s);
-    const l = f.crossing(target, direction < 0 ? s : -s);
-    parts.push({ at: Math.max(t, now), early: Math.max(e, now), late: Math.max(l, now), label });
+    const fast = direction < 0 ? f.bLo : f.bHi; // steepest plausible slope toward the target
+    const slow = direction < 0 ? f.bHi : f.bLo; // shallowest
+    const at = Math.max(now, f.crossingWith(target, f.b, now));
+    const early = Math.max(now, f.crossingWith(target, fast, now) ?? now);
+    const slowCross = Math.sign(slow) === direction ? f.crossingWith(target, slow, now) : null;
+    const late = slowCross == null ? Infinity : Math.max(at, slowCross);
+    parts.push({ at, early, late, label, clear: Math.sign(slow) === direction, drift: f.b });
   };
-  consider(fi, targetI, -1, "interval");
-  consider(fd, targetD, +1, "duration");
+  consider(fi, rule.interval / MIN, -1, "interval");
+  consider(fd, rule.duration / 1000, +1, "duration");
 
   if (reasons.length) return { status: "no-trend", reasons };
   if (parts.length === 0) return { status: "met" };
   const at = Math.max(...parts.map((p) => p.at));
+  if (at - now > FORECAST_HORIZON) return { status: "far", at, sources: parts.map((p) => p.label) };
+  let late = Math.max(...parts.map((p) => p.late));
+  // A plausible-range edge beyond the horizon is as good as "unknown".
+  if (late - now > FORECAST_HORIZON) late = Infinity;
   return {
     status: "forecast",
     at,
     early: Math.max(...parts.map((p) => p.early)),
-    late: Math.max(...parts.map((p) => p.late)),
+    late,
     hospitalAt: at + rule.span,
+    confidence: parts.every((p) => p.clear) && late !== Infinity ? "clear" : "low",
     sources: parts.map((p) => p.label),
+    drift: Object.fromEntries(parts.map((p) => [p.label, p.drift])),
   };
 }
 
@@ -133,15 +161,21 @@ export function renderChart(svg, state, rule, now = Date.now()) {
   if (allX.length === 0) return null;
   let xMin = Math.min(...allX);
   let xMax = Math.max(now, ...allX);
-  if (fc.status === "forecast") xMax = Math.max(xMax, Math.min(fc.late, now + 6 * HOUR));
+  if (fc.status === "forecast") {
+    const far = fc.late === Infinity ? fc.at + Math.max(fc.at - now, 30 * MIN) : fc.late;
+    xMax = Math.max(xMax, Math.min(far, now + FORECAST_HORIZON));
+  }
   const span0 = Math.max(xMax - xMin, 20 * MIN);
   xMin = xMax - span0;
   xMax += span0 * 0.06;
   xMin -= span0 * 0.04;
   const sx = (t) => L + ((t - xMin) / (xMax - xMin)) * (W - L - R);
 
-  const yMaxI = Math.max(targetI * 1.4, ...intervals.map((p) => p.y)) * 1.12;
-  const yMaxD = Math.max(targetD * 1.5, ...durations.map((p) => p.y)) * 1.12;
+  // Scale to the bulk of the data (90th percentile), not to a single outlier;
+  // anything above is drawn as a hollow marker pinned to the top.
+  const q90 = (arr) => { const b = [...arr].sort((p, q) => p - q); return b.length ? b[Math.floor((b.length - 1) * 0.9)] : 0; };
+  const yMaxI = Math.max(targetI * 1.4, q90(intervals.map((p) => p.y)) * 1.15) * 1.12;
+  const yMaxD = Math.max(targetD * 1.5, q90(durations.map((p) => p.y)) * 1.15) * 1.12;
   const syI = (v) => P1.top + P1.h - (Math.min(v, yMaxI) / yMaxI) * P1.h;
   const syD = (v) => P2.top + P2.h - (Math.min(v, yMaxD) / yMaxD) * P2.h;
 
@@ -171,11 +205,14 @@ export function renderChart(svg, state, rule, now = Date.now()) {
   const marks = g("marks");
   if (fc.status === "forecast") {
     const e = sx(Math.min(fc.early, xMax)), l = sx(Math.min(fc.late, xMax));
-    marks.appendChild(svgEl("rect", { x: e, y: P1.top, width: Math.max(l - e, 2), height: XB - P1.top, class: "fc-band" }));
+    marks.appendChild(svgEl("rect", {
+      x: e, y: P1.top, width: Math.max(l - e, 2), height: XB - P1.top,
+      class: "fc-band" + (fc.late === Infinity ? " open-ended" : ""),
+    }));
     const fx = sx(Math.min(fc.at, xMax));
-    marks.appendChild(svgEl("line", { x1: fx, x2: fx, y1: P1.top, y2: XB, class: "fc-line" }));
-    marks.appendChild(svgEl("text", { x: fx, y: P1.top + 10, "text-anchor": fx > W - 70 ? "end" : "start", dx: fx > W - 70 ? -4 : 4, class: "fc-label" },
-      `${rule.label} ~${clock(fc.at)}`));
+    marks.appendChild(svgEl("line", { x1: fx, x2: fx, y1: P1.top, y2: XB, class: "fc-line" + (fc.confidence === "low" ? " low" : "") }));
+    const tag = fc.confidence === "low" ? `${rule.label} ~${clock(fc.at)}?` : `${rule.label} ~${clock(fc.at)}`;
+    marks.appendChild(svgEl("text", { x: fx, y: P1.top + 10, "text-anchor": fx > W - 70 ? "end" : "start", dx: fx > W - 70 ? -4 : 4, class: "fc-label" }, tag));
   }
   const nx = sx(now);
   marks.appendChild(svgEl("line", { x1: nx, x2: nx, y1: P1.top, y2: XB, class: "now-line" }));
@@ -205,12 +242,19 @@ export function renderChart(svg, state, rule, now = Date.now()) {
     if (points.length) {
       const d = points.map((p, i) => `${i ? "L" : "M"}${sx(p.x)},${sy(p.y)}`).join("");
       grp.appendChild(svgEl("path", { d, class: "series" }));
-      for (const p of points) grp.appendChild(svgEl("circle", { cx: sx(p.x), cy: sy(p.y), r: 3.5, class: "dot" }));
+      const yMax = sy === syI ? yMaxI : yMaxD;
+      for (const p of points) {
+        const clipped = p.y > yMax;
+        grp.appendChild(svgEl("circle", { cx: sx(p.x), cy: clipped ? sy(yMax) + 5 : sy(p.y), r: 3.5, class: clipped ? "dot clipped" : "dot" }));
+      }
       const last = points[points.length - 1];
       grp.appendChild(svgEl("text", { x: sx(last.x), y: sy(last.y) - 7, "text-anchor": "middle", class: "endpoint" }, labelFmt(last.y)));
     }
   };
   const defs = svg.appendChild(svgEl("defs"));
+  const grad = defs.appendChild(svgEl("linearGradient", { id: "fc-fade", x1: 0, x2: 1, y1: 0, y2: 0 }));
+  grad.appendChild(svgEl("stop", { offset: "0", "stop-color": "var(--target)", "stop-opacity": 0.16 }));
+  grad.appendChild(svgEl("stop", { offset: "1", "stop-color": "var(--target)", "stop-opacity": 0 }));
   for (const p of [P1, P2]) {
     const cp = defs.appendChild(svgEl("clipPath", { id: `clip-${p.top}` }));
     cp.appendChild(svgEl("rect", { x: L, y: p.top, width: W - L - R, height: p.h }));
@@ -222,23 +266,34 @@ export function renderChart(svg, state, rule, now = Date.now()) {
   const hover = g("hover");
   hover.appendChild(svgEl("line", { x1: 0, x2: 0, y1: P1.top, y2: XB, class: "crosshair", visibility: "hidden" }));
 
-  return { W, H, L, R, sx, syI, syD, xMin, xMax, intervals, durations, fi, fd, fc, P1, P2, XB };
+  const series = seriesFrom(state);
+  return { W, H, L, R, sx, syI, syD, xMin, xMax, intervals, durations, fi, fd, fc, P1, P2, XB,
+    hiddenSessions: series.hiddenSessions, ignored: series.ignored, sessionStart: series.session[0]?.start ?? null };
 }
 
 /** Human summary of the forecast for the caption under the chart. */
 export function describeForecast(fc, rule) {
+  const perHour = (v, unit) => `${Math.abs(v).toFixed(1)} ${unit} per hour`;
   switch (fc.status) {
     case "insufficient":
-      return "Need at least 3 finished contractions to fit a trend.";
+      return "Need at least 3 finished contractions in this session to fit a trend.";
     case "met":
       return `The trend is already at ${rule.label} spacing and length. The banner tracks how long it holds.`;
     case "no-trend": {
-      const what = fc.reasons.map((r) => (r === "interval" ? "intervals aren't shortening" : "durations aren't lengthening")).join(" and ");
-      return `No ${rule.label} forecast yet: ${what} on the current trend.`;
+      const what = fc.reasons.map((r) => (r === "interval" ? "intervals aren't getting shorter" : "durations aren't getting longer")).join(" and ");
+      return `No ${rule.label} forecast yet: ${what} on this session's trend.`;
     }
+    case "far":
+      return `The drift is in the right direction, but at this pace the ${rule.label} pattern is more than 6 hours away.`;
     case "forecast": {
-      const range = fc.early !== fc.late ? ` (±1σ: ${clock(fc.early)}–${clock(fc.late)})` : "";
-      return `At this trend the ${rule.label} pattern starts around ${clock(fc.at)}${range}. An hour of that puts the hospital around ${clock(fc.hospitalAt)}.`;
+      const drift = fc.sources
+        .map((k) => (k === "interval" ? `intervals shortening about ${perHour(fc.drift.interval, "min")}` : `durations lengthening about ${perHour(fc.drift.duration, "sec")}`))
+        .join(", ");
+      if (fc.confidence === "low") {
+        return `So far ${drift}, but the pace is still uncertain. If it holds, ${rule.label} could start around ${clock(fc.at)}, possibly much later. More contractions will sharpen this.`;
+      }
+      const range = fc.early !== fc.late ? ` (likely ${clock(fc.early)}–${clock(fc.late)})` : "";
+      return `Clear trend: ${drift}. The ${rule.label} pattern should start around ${clock(fc.at)}${range}. An hour of that puts the hospital around ${clock(fc.hospitalAt)}.`;
     }
     default:
       return "";
