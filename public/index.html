@@ -76,13 +76,36 @@
   <dialog id="editDialog">
     <form method="dialog" id="editForm">
       <h3>Edit contraction</h3>
-      <label>Started
-        <input type="datetime-local" step="1" id="editStart" required />
-      </label>
-      <label>Ended
-        <input type="datetime-local" step="1" id="editEnd" />
-      </label>
+
+      <div class="field">
+        <div class="field-head">
+          <span>Started</span>
+          <span class="field-value"><strong id="editStartClock"></strong> <span class="delta" id="editStartDelta"></span></span>
+        </div>
+        <div class="slider-row">
+          <button type="button" class="nudge" data-nudge="start" data-step="-5" aria-label="5 seconds earlier">−5s</button>
+          <input type="range" id="editStart" min="-600" max="600" step="5" value="0" aria-label="Shift start time" />
+          <button type="button" class="nudge" data-nudge="start" data-step="5" aria-label="5 seconds later">+5s</button>
+        </div>
+        <div class="slider-ends"><span>10 min earlier</span><span>10 min later</span></div>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <span>Duration</span>
+          <span class="field-value"><strong id="editDurationText"></strong></span>
+        </div>
+        <div class="slider-row">
+          <button type="button" class="nudge" data-nudge="dur" data-step="-1" aria-label="1 second shorter">−1s</button>
+          <input type="range" id="editDuration" min="0" max="300" step="1" value="60" aria-label="Duration" />
+          <button type="button" class="nudge" data-nudge="dur" data-step="1" aria-label="1 second longer">+1s</button>
+        </div>
+        <div class="slider-ends"><span>0:00</span><span id="editDurationMax">5:00</span></div>
+        <p class="note" id="editOpenNote" hidden>This one is still running. Saving will end it at the chosen duration.</p>
+      </div>
+
       <div class="dialog-actions">
+        <button type="button" class="btn danger" id="editDelete">Delete</button>
         <button type="button" class="btn ghost" id="editCancel">Cancel</button>
         <button type="submit" class="btn" id="editSave">Save</button>
       </div>

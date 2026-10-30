@@ -12,13 +12,15 @@ const el = {
   big: $("big"), bigLabel: $("bigLabel"), bigTimer: $("bigTimer"), bigHint: $("bigHint"),
   sinceLast: $("sinceLast"), undo: $("undo"),
   count: $("count"), list: $("list"), empty: $("empty"), clear: $("clear"), rule: $("rule"),
-  dialog: $("editDialog"), form: $("editForm"), editStart: $("editStart"), editEnd: $("editEnd"), editCancel: $("editCancel"),
+  dialog: $("editDialog"), form: $("editForm"), editCancel: $("editCancel"), editDelete: $("editDelete"),
+  editStart: $("editStart"), editStartClock: $("editStartClock"), editStartDelta: $("editStartDelta"),
+  editDuration: $("editDuration"), editDurationText: $("editDurationText"), editDurationMax: $("editDurationMax"),
+  editOpenNote: $("editOpenNote"),
 };
 
 let state = { ...EMPTY_STATE };
 let pending = 0;
 let lastListKey = "";
-let editingId = null;
 
 // ---------- formatting ----------
 const pad = (n) => String(n).padStart(2, "0");
@@ -43,10 +45,6 @@ function fmtAgo(ms) {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ${pad(s % 60)}s ago`;
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
-}
-function toLocalInput(ms) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 const uid = () =>
   (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
@@ -204,35 +202,72 @@ function render() {
 }
 
 // ---------- edit dialog ----------
+// Start is edited as an offset from the recorded start (seconds, 5s steps);
+// duration as whole seconds. The end time is derived: start + duration.
+let editing = null; // { id, start, end }
+
+function fmtClockSec(ms) {
+  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+function fmtDelta(sec) {
+  if (!sec) return "";
+  const a = Math.abs(sec);
+  const txt = a >= 60 ? `${Math.floor(a / 60)}m ${pad(a % 60)}s` : `${a}s`;
+  return sec < 0 ? `${txt} earlier` : `${txt} later`;
+}
+
+function renderEdit() {
+  if (!editing) return;
+  const offset = Number(el.editStart.value);
+  const dur = Number(el.editDuration.value);
+  el.editStartClock.textContent = fmtClockSec(editing.start + offset * 1000);
+  el.editStartDelta.textContent = fmtDelta(offset);
+  el.editDurationText.textContent = fmtDuration(dur * 1000);
+}
+
 function openEdit(id) {
   const c = state.contractions.find((x) => x.id === id);
   if (!c) return;
-  editingId = id;
-  el.editStart.value = toLocalInput(c.start);
-  el.editEnd.value = c.end == null ? "" : toLocalInput(c.end);
+  editing = { ...c };
+  const durSec = Math.round(((c.end ?? Date.now()) - c.start) / 1000);
+  // Keep the slider usable for unusually long contractions.
+  const max = Math.max(300, Math.ceil(durSec / 60) * 60);
+  el.editDuration.max = String(max);
+  el.editDurationMax.textContent = fmtDuration(max * 1000);
+  el.editDuration.value = String(Math.min(max, Math.max(0, durSec)));
+  el.editStart.value = "0";
+  el.editOpenNote.hidden = c.end != null;
+  renderEdit();
   el.dialog.showModal();
+}
+
+el.editStart.addEventListener("input", renderEdit);
+el.editDuration.addEventListener("input", renderEdit);
+for (const btn of el.form.querySelectorAll(".nudge")) {
+  btn.addEventListener("click", () => {
+    const input = btn.dataset.nudge === "start" ? el.editStart : el.editDuration;
+    const next = Number(input.value) + Number(btn.dataset.step);
+    input.value = String(Math.min(Number(input.max), Math.max(Number(input.min), next)));
+    renderEdit();
+  });
 }
 
 el.form.addEventListener("submit", (e) => {
   e.preventDefault();
-  const start = new Date(el.editStart.value).getTime();
-  const end = el.editEnd.value ? new Date(el.editEnd.value).getTime() : null;
-  if (!Number.isFinite(start)) return;
+  if (!editing) return;
+  const start = editing.start + Number(el.editStart.value) * 1000;
+  const end = start + Number(el.editDuration.value) * 1000;
   el.dialog.close();
-  send({ type: "update", id: editingId, start, end });
+  send({ type: "update", id: editing.id, start, end });
+  editing = null;
 });
 el.editCancel.addEventListener("click", () => el.dialog.close());
-
-// Delete from inside the dialog.
-const del = document.createElement("button");
-del.type = "button";
-del.className = "btn danger";
-del.textContent = "Delete";
-del.addEventListener("click", () => {
+el.editDelete.addEventListener("click", () => {
+  if (!editing) return;
   el.dialog.close();
-  send({ type: "delete", id: editingId });
+  send({ type: "delete", id: editing.id });
+  editing = null;
 });
-el.form.querySelector(".dialog-actions").prepend(del);
 
 // ---------- controls ----------
 el.big.addEventListener("click", () => {

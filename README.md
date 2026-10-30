@@ -19,7 +19,7 @@ foreground), so whoever taps, the other sees it within a few seconds.
   - yellow: the last few contractions fit the rule
   - orange: the rule has held for 30+ minutes
   - red (pulsing): the rule has held for a full hour, time to go
-- **Undo last** removes the most recent entry. **Edit** on any entry adjusts or deletes it.
+- **Undo last** removes the most recent entry. **Edit** on any entry opens sliders to nudge the start time (5-second steps) and the duration (1-second steps), or delete it.
 - The **Rule** dropdown switches between 5-1-1 and 4-1-1 for everyone.
 
 Follow your provider's instructions over the app, and go in regardless if water breaks,
