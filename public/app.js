@@ -1,5 +1,6 @@
 import { EMPTY_STATE, RULES, applyOp, computeStats, normalizeState } from "/state.mjs";
 import { countdown, fmtHM } from "/zmanim.mjs";
+import { renderChart, describeForecast } from "/chart.mjs";
 
 const API = "/api/state";
 const POLL_MS = 3000;
@@ -18,11 +19,14 @@ const el = {
   editStart: $("editStart"), editStartClock: $("editStartClock"), editStartDelta: $("editStartDelta"),
   editDuration: $("editDuration"), editDurationText: $("editDurationText"), editDurationMax: $("editDurationMax"),
   editOpenNote: $("editOpenNote"),
+  chart: $("chart"), chartWrap: $("chartWrap"), chartTip: $("chartTip"), chartCaption: $("chartCaption"), chartEmpty: $("chartEmpty"),
 };
 
 let state = { ...EMPTY_STATE };
 let pending = 0;
 let lastListKey = "";
+let chartLayout = null;
+let chartRenderedAt = 0;
 
 // ---------- formatting ----------
 const pad = (n) => String(n).padStart(2, "0");
@@ -182,10 +186,14 @@ function render() {
   // Rule
   if (el.rule.value !== state.rule) el.rule.value = state.rule;
 
+  const key = state.contractions.map((c) => `${c.id}:${c.start}:${c.end}`).join("|");
+
+  // Trend chart: redraw when the data changes, and every 15s so the "now" marker moves.
+  if (key !== lastListKey || now - chartRenderedAt > 15e3) drawChart(now);
+
   // History (newest first). Re-render only when the list itself changes.
   el.count.textContent = st.count ? `(${st.count})` : "";
   el.empty.hidden = st.count > 0;
-  const key = state.contractions.map((c) => `${c.id}:${c.start}:${c.end}`).join("|");
   if (key !== lastListKey) {
     lastListKey = key;
     el.list.replaceChildren(
@@ -213,6 +221,59 @@ function render() {
     );
   }
 }
+
+// ---------- trend chart ----------
+function drawChart(now) {
+  chartRenderedAt = now;
+  const st = computeStats(state, now);
+  const enough = state.contractions.length >= 2;
+  el.chartEmpty.hidden = enough;
+  el.chartWrap.hidden = !enough;
+  if (!enough) {
+    el.chartCaption.textContent = "";
+    chartLayout = null;
+    return;
+  }
+  chartLayout = renderChart(el.chart, state, st.rule, now);
+  el.chartCaption.textContent = chartLayout ? describeForecast(chartLayout.fc, st.rule) : "";
+  el.chartTip.hidden = true;
+}
+
+function chartHover(ev) {
+  if (!chartLayout) return;
+  const rect = el.chart.getBoundingClientRect();
+  const scale = chartLayout.W / rect.width;
+  const xv = (ev.clientX - rect.left) * scale;
+  const t = chartLayout.xMin + ((xv - chartLayout.L) / (chartLayout.W - chartLayout.L - chartLayout.R)) * (chartLayout.xMax - chartLayout.xMin);
+  const pts = [...chartLayout.intervals, ...chartLayout.durations];
+  if (!pts.length) return;
+  let best = null;
+  for (const p of pts) if (!best || Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
+  const iv = chartLayout.intervals.find((p) => p.id === best.id);
+  const du = chartLayout.durations.find((p) => p.id === best.id);
+  const cx = chartLayout.sx(best.x);
+  const line = el.chart.querySelector(".crosshair");
+  line.setAttribute("x1", cx);
+  line.setAttribute("x2", cx);
+  line.setAttribute("visibility", "visible");
+  const lines = [fmtClock(best.x)];
+  if (iv) lines.push(`Between: ${fmtGap(iv.y * 60e3)}`);
+  if (du) lines.push(`Duration: ${fmtDuration(du.y * 1000)}`);
+  if (chartLayout.fi) lines.push(`Trend: ${fmtGap(chartLayout.fi.at(best.x) * 60e3)} apart`);
+  el.chartTip.replaceChildren(...lines.map((l) => { const d = document.createElement("div"); d.textContent = l; return d; }));
+  el.chartTip.hidden = false;
+  const px = cx / scale;
+  const tipW = el.chartTip.offsetWidth;
+  el.chartTip.style.left = `${Math.max(0, Math.min(rect.width - tipW, px > rect.width / 2 ? px - tipW - 10 : px + 10))}px`;
+}
+function chartLeave() {
+  el.chartTip.hidden = true;
+  const line = el.chart.querySelector(".crosshair");
+  if (line) line.setAttribute("visibility", "hidden");
+}
+el.chart.addEventListener("pointermove", chartHover);
+el.chart.addEventListener("pointerdown", chartHover);
+el.chart.addEventListener("pointerleave", chartLeave);
 
 // ---------- edit dialog ----------
 // Start is edited as an offset from the recorded start (seconds, 5s steps);

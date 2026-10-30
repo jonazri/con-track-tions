@@ -12,6 +12,9 @@
   --hot: #e0702a;
   --go: #d6304d;
   --gray: #8a8392;
+  --series: #4f5fd8;
+  --series-ink: #4f5fd8;
+  --target: #c9405a;
   --radius: 18px;
   --shadow: 0 6px 24px rgba(40, 20, 50, 0.08);
 }
@@ -23,6 +26,9 @@
     --muted: #a79fb0;
     --line: #2d2936;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    --series: #6472e8;
+    --series-ink: #8d99ff;
+    --target: #dc5a74;
   }
 }
 * { box-sizing: border-box; }
@@ -166,6 +172,39 @@ h2 { font-size: 1rem; margin: 0; }
 .empty { color: var(--muted); margin: 10px 0 0; font-size: 0.95rem; }
 .empty[hidden] { display: none; }
 .danger-row { text-align: center; margin-top: 10px; }
+
+/* Trend chart */
+.chart-card { background: var(--card); border-radius: var(--radius); padding: 14px 16px 12px; box-shadow: var(--shadow); }
+.chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 4px; }
+.sw { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--series); }
+.sw-trend { border-top-style: dashed; }
+.sw-band { height: 8px; border: 0; background: color-mix(in srgb, var(--series) 22%, transparent); }
+.sw-target { border-top-color: var(--target); }
+.sw-fc { height: 8px; border: 0; background: color-mix(in srgb, var(--target) 22%, transparent); }
+.chart-wrap { position: relative; margin-top: 8px; touch-action: pan-y; }
+.chart { display: block; width: 100%; height: auto; font-size: 9.5px; font-family: inherit; }
+.chart .grid line { stroke: var(--line); stroke-width: 1; }
+.chart .grid text { fill: var(--muted); font-variant-numeric: tabular-nums; }
+.chart .panel-title { fill: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+.chart .series { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--series); stroke: var(--card); stroke-width: 2; }
+.chart .trend { stroke: var(--series-ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.chart .band { fill: var(--series); fill-opacity: 0.16; }
+.chart .target { stroke: var(--target); stroke-width: 1; }
+.chart .target-label { fill: var(--target); font-size: 9px; }
+.chart .endpoint { fill: var(--text); font-weight: 700; }
+.chart .now-line { stroke: var(--muted); stroke-width: 1; }
+.chart .now-label { fill: var(--muted); font-size: 9px; }
+.chart .fc-band { fill: var(--target); fill-opacity: 0.14; }
+.chart .fc-line { stroke: var(--target); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .fc-label { fill: var(--target); font-weight: 700; }
+.chart .crosshair { stroke: var(--text); stroke-width: 1; stroke-opacity: 0.5; }
+.tooltip { position: absolute; top: 8px; pointer-events: none; background: var(--text); color: var(--card); font-size: 0.75rem; line-height: 1.35; padding: 6px 8px; border-radius: 8px; white-space: nowrap; box-shadow: var(--shadow); }
+.tooltip[hidden] { display: none; }
+.chart-caption { font-size: 0.85rem; color: var(--text); margin: 8px 0 0; }
+.chart-caption:empty { display: none; }
 
 .foot { color: var(--muted); font-size: 0.8rem; padding: 0 6px; }
 .foot p { margin: 0; }

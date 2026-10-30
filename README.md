@@ -21,6 +21,10 @@ foreground), so whoever taps, the other sees it within a few seconds.
   - red (pulsing): the rule has held for a full hour, time to go
 - **Undo last** removes the most recent entry. **Edit** on any entry opens sliders to nudge the start time (5-second steps) and the duration (1-second steps), or delete it.
 - The **Rule** dropdown switches between 5-1-1 and 4-1-1 for everyone.
+- The **Trend & forecast** chart at the bottom plots minutes-between and duration over time,
+  with a least-squares trend line, a ±1σ band, the rule's targets, and a shaded forecast window
+  for when the trend reaches the pattern (plus an hour for the hospital rule). Hover or drag
+  across it for values.
 
 Follow your provider's instructions over the app, and go in regardless if water breaks,
 there is bleeding, or anything feels wrong.
@@ -30,6 +34,8 @@ there is bleeding, or anything feels wrong.
 ```
 public/            static site (index.html, style.css, app.js)
 public/state.mjs   shared reducer + stats, used by the browser AND the function
+public/zmanim.mjs  Crown Heights sunset/tzeis and the 20 Cheshvan countdown
+public/chart.mjs   regression, forecast, and the SVG trend chart
 netlify/functions/state.mts   GET/POST /api/state, backed by Netlify Blobs
 test/              unit tests for the reducer and a local dev server
 ```

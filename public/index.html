@@ -72,6 +72,25 @@
       </div>
     </section>
 
+    <section class="chart-card">
+      <div class="chart-head">
+        <h2>Trend &amp; forecast</h2>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="sw sw-series"></span>Actual</li>
+          <li><span class="sw sw-trend"></span>Trend</li>
+          <li><span class="sw sw-band"></span>±1σ</li>
+          <li><span class="sw sw-target"></span>Target</li>
+          <li><span class="sw sw-fc"></span>Forecast</li>
+        </ul>
+      </div>
+      <div class="chart-wrap" id="chartWrap">
+        <svg id="chart" class="chart" role="img" aria-label="Contraction trend chart"></svg>
+        <div class="tooltip" id="chartTip" hidden></div>
+      </div>
+      <p class="chart-caption" id="chartCaption"></p>
+      <p class="empty" id="chartEmpty">The chart appears after a couple of contractions.</p>
+    </section>
+
     <footer class="foot">
       <p><strong>5-1-1</strong> = contractions about 5 minutes apart, lasting about 1 minute, for 1 hour.
       Follow your own provider's instructions over this app, and go in regardless if your water
